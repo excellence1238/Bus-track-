@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Punjab Smart Bus Tracker – SIH Prototype</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<style>
+  :root{
+    --brand:#0b5cff; --ink:#0b1736; --muted:#6b7280;
+    --ok:#16a34a; --warn:#eab308; --danger:#ef4444;
+    --panel:#f8fafc; --card:#ffffff; --ring:rgba(11,92,255,.15);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--ink);background:#eef2f7}
+  .topbar{
+    position:sticky;top:0;z-index:1000;background:linear-gradient(90deg,#0038ff,#00a9ff);
+    color:#fff; padding:10px 14px; display:flex; align-items:center; gap:10px; box-shadow:0 2px 10px rgba(0,0,0,.12)
+  }
+  .brand{font-weight:800; letter-spacing:.3px; display:flex; align-items:center; gap:8px}
+  .brand i{font-size:22px}
+  .wrap{display:grid; grid-template-columns:360px 1fr; min-height:calc(100vh - 56px)}
+  #side{
+    background:var(--panel); border-right:1px solid #e5e7eb; padding:12px; overflow:auto
+  }
+  #map{height:calc(100vh - 56px); width:100%}
+
+  .toolbar{display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 12px}
+  .btn{border:0; padding:9px 12px; border-radius:10px; background:#fff; color:var(--ink); box-shadow:0 2px 6px rgba(0,0,0,.06); cursor:pointer; font-weight:600}
+  .btn.primary{background:var(--brand); color:#fff}
+  .btn.sos{background:var(--danger); color:#fff}
+  .btn.ghost{background:transparent; border:1px solid #e5e7eb}
+  .select{padding:9px 12px;border-radius:10px;border:1px solid #e5e7eb;background:#fff;font-weight:600}
+
+  .card{background:var(--card); border:1px solid #e5e7eb; border-radius:14px; padding:12px; box-shadow:0 4px 14px rgba(0,0,0,.06); margin-bottom:12px}
+  .card h3{margin:0 0 8px 0; font-size:16px}
+  .eta-badge{display:inline-block; background:var(--ring); color:var(--brand); padding:4px 8px; border-radius:999px; font-weight:700}
+
+  .stop-list{display:flex; flex-direction:column; gap:8px}
+  .stop-item{background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:10px}
+  .stop-top{display:flex; justify-content:space-between; align-items:center; gap:6px}
+  .mini{color:var(--muted); font-size:12px}
+  .arrivals{margin-top:8px; display:flex; flex-direction:column; gap:6px}
+  .arrival{display:flex; justify-content:space-between; align-items:center; gap:6px; font-weight:600}
+  .crowd{height:8px; border-radius:999px; background:#e5e7eb; overflow:hidden}
+  .crowd > span{display:block; height:100%}
+
+  .legend{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:4px}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .notif{position:fixed; right:12px; top:70px; background:#111827; color:#fff; padding:10px 14px; border-radius:10px; box-shadow:0 10px 24px rgba(0,0,0,.2); display:none; z-index:2000}
+  .ping{
+    position:absolute; width:16px; height:16px; border-radius:50%; border:3px solid var(--brand);
+    animation:ping 1.6s cubic-bezier(0,0,.2,1) infinite; pointer-events:none;
+  }
+  @keyframes ping{
+    0%{transform:scale(.6); opacity:.8}
+    80%{transform:scale(2.8); opacity:0}
+    100%{opacity:0}
+  }
+
+  /* Lite mode badge */
+  .lite-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#e0f2fe;color:#0369a1;font-weight:700}
+
+  @media (max-width: 900px){
+    .wrap{grid-template-columns:1fr}
+    #map{height:60vh}
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><i>🚌</i> Punjab Smart Bus Tracker</div>
+    <div style="margin-left:auto; display:flex; gap:8px; align-items:center">
+      <span class="lite-badge" id="liteState">Lite: Off</span>
+      <select id="lang" class="select">
+        <option value="en">English</option>
+        <option value="hi">हिंदी</option>
+        <option value="pa">ਪੰਜਾਬੀ</option>
+      </select>
+      <button class="btn" id="speakBtn">🔊 Voice</button>
+      <button class="btn sos" id="sosBtn">🚨 SOS</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div id="side">
+      <div class="toolbar">
+        <button class="btn primary" id="centerBtn">🎯 Center to Me</button>
+        <button class="btn" id="toggleLite">⚡ Lite Mode</button>
+        <button class="btn ghost" id="notifyBtn">🔔 Test Notify</button>
+      </div>
+
+      <div class="card" id="summaryCard">
+        <h3 id="titleSummary">Nearby Stop</h3>
+        <div class="mini" id="cityInfo">Chandigarh · Tier-2 City</div>
+        <div class="legend">
+          <span class="dot" style="background:#22c55e"></span><span class="mini">Low crowd</span>
+          <span class="dot" style="background:#eab308"></span><span class="mini">Medium</span>
+          <span class="dot" style="background:#ef4444"></span><span class="mini">High</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 id="stopsHeader">Stops & Incoming Buses</h3>
+        <div class="stop-list" id="stopList"></div>
+      </div>
+
+      <div class="card">
+        <h3 id="featuresHeader">Safety & Access</h3>
+        <div class="mini">• SOS alerts to control room & nearby commuters<br/>• Live share location for women safety<br/>• Offline “Lite Map” for low bandwidth</div>
+      </div>
+    </div>
+
+    <div style="position:relative">
+      <div id="map"></div>
+      <div id="radar" class="ping" style="display:none"></div>
+      <div id="notif" class="notif"></div>
+    </div>
+  </div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+/* ============ Translations (EN/HI/PA) ============ */
+const T = {
+  en:{ nearby:"Nearby Stop", stops:"Stops & Incoming Buses", features:"Safety & Access",
+       eta:"ETA", mins:"mins", sos:"SOS alert sent!", confirm:"Thanks! Update recorded.",
+       arriving:"is 2 stops away!", liteOn:"Lite: On", liteOff:"Lite: Off" },
+  hi:{ nearby:"नज़दीकी स्टॉप", stops:"स्टॉप्स और आने वाली बसें", features:"सुरक्षा व सुविधा",
+       eta:"आगमन", mins:"मिनट", sos:"SOS अलर्ट भेजा गया!", confirm:"धन्यवाद! अपडेट दर्ज हुआ।",
+       arriving:"2 स्टॉप दूर है!", liteOn:"लाइट: ऑन", liteOff:"लाइट: ऑफ" },
+  pa:{ nearby:"ਨੇੜਲਾ ਸਟਾਪ", stops:"ਸਟਾਪ ਤੇ ਆਉਣ ਵਾਲੀਆਂ ਬੱਸਾਂ", features:"ਸੁਰੱਖਿਆ ਅਤੇ ਸਹੂਲਤ",
+       eta:"ETA", mins:"ਮਿੰਟ", sos:"SOS ਅਲਰਟ ਭੇਜ ਦਿੱਤਾ!", confirm:"ਧੰਨਵਾਦ! ਅੱਪਡੇਟ ਰਿਕਾਰਡ ਹੋ ਗਿਆ।",
+       arriving:"2 ਸਟਾਪ ਦੂਰ ਹੈ!", liteOn:"ਲਾਈਟ: ਓਨ", liteOff:"ਲਾਈਟ: ਆਫ਼" }
+};
+let LANG = 'en';
+const $ = (id)=>document.getElementById(id);
+
+/* ============ Map Init ============ */
+const map = L.map('map', { zoomControl:true }).setView([30.7333,76.7794], 13);
+const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19});
+tiles.addTo(map);
+
+/* Lite mode = no tiles, only vectors */
+let liteMode = false;
+function setLite(on){
+  liteMode = on;
+  if(on){ map.removeLayer(tiles); $('liteState').textContent = T[LANG].liteOn; }
+  else { tiles.addTo(map); $('liteState').textContent = T[LANG].liteOff; }
+}
+
+/* ============ Stops & Routes (mock) ============ */
+const stops = [
+  {id:'S1', name:'Sector 17 Bus Stand', lat:30.7417, lng:76.7821},
+  {id:'S2', name:'PGI Stop', lat:30.7641, lng:76.7730},
+  {id:'S3', name:'ISBT-43', lat:30.7134, lng:76.7549},
+  {id:'S4', name:'Punjab Univ Gate', lat:30.7603, lng:76.7697}
+];
+
+const routes = {
+  R1: [
+    [30.7134,76.7549],[30.7245,76.7618],[30.7338,76.7692],[30.7417,76.7821],[30.7603,76.7697],[30.7641,76.7730]
+  ],
+  R2: [
+    [30.7417,76.7821],[30.7370,76.7750],[30.7333,76.7694],[30.7290,76.7640],[30.7240,76.7600]
+  ]
+};
+
+/* Draw polylines */
+const polylines = [];
+Object.values(routes).forEach(coords=>{
+  const pl = L.polyline(coords,{color:'#0b5cff',weight:3,opacity:0.8}).addTo(map);
+  polylines.push(pl);
+});
+
+/* Stop markers */
+const stopIcon = L.divIcon({
+  html:'<div style="background:#fff;border:2px solid #0b5cff;width:12px;height:12px;border-radius:50%"></div>',
+  className:'', iconSize:[12,12], iconAnchor:[6,6]
+});
+stops.forEach(s=> L.marker([s.lat,s.lng],{icon:stopIcon}).addTo(map).bindTooltip(s.name,{permanent:false}));
+
+/* ============ Buses (multiple, with driver icon) ============ */
+const busIcon = L.icon({
+  iconUrl:'https://cdn-icons-png.flaticon.com/512/2953/2953320.png',
+  iconSize:[40,40], iconAnchor:[20,36], popupAnchor:[0,-28]
+});
+/* each bus travels along a route index with a step pointer */
+const buses = [
+  { id:'101', route:'R1', idx:0, speed:0.0012, crowd:'Low' },
+  { id:'202', route:'R1', idx:2, speed:0.0010, crowd:'Medium' },
+  { id:'303', route:'R2', idx:0, speed:0.0011, crowd:'High' }
+];
+const busMarkers = {};
+buses.forEach(b=>{
+  const start = routes[b.route][b.idx];
+  const m = L.marker(start,{icon:busIcon}).addTo(map);
+  m.bindPopup(`🚌 Bus ${b.id}<br/>ETA: –`);
+  busMarkers[b.id]=m;
+});
+
+/* ============ Utility: Haversine & ETA (mock AI-lite) ============ */
+function haversine(a,b){
+  const R=6371, toRad=(x)=>x*Math.PI/180;
+  const dLat=toRad(b[0]-a[0]), dLng=toRad(b[1]-a[1]);
+  const lat1=toRad(a[0]), lat2=toRad(b[0]);
+  const x = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(x)); // km
+}
+function etaMinutes(from,to){
+  // base speed 22 km/h, traffic factor by time of day (mock), plus historical delay random
+  const dist = haversine(from,to);
+  const hour = new Date().getHours();
+  const traffic = (hour>=8&&hour<=11)||(hour>=17&&hour<=20) ? 0.8 : 1.0; // slower at peak
+  const speed = 22*traffic; // km/h
+  let mins = (dist/speed)*60;
+  // historical delay factor +- 2 minutes
+  mins += (Math.random()*4-2);
+  mins = Math.max(1,mins);
+  return Math.round(mins);
+}
+
+/* ============ Move buses along their routes ============ */
+function moveStep(b){
+  const path = routes[b.route];
+  b.idx = (b.idx+1)%path.length;
+  const pos = path[b.idx];
+  const mk = busMarkers[b.id];
+  mk.setLatLng(pos);
+  // dynamic crowd
+  const crowdLevels=['Low','Medium','High'];
+  b.crowd = crowdLevels[Math.floor(Math.random()*3)];
+  // popup content
+  mk.setPopupContent(`🚌 <b>Bus ${b.id}</b><br/>Crowd: ${b.crowd}<br/><span class="mini">Tap stop to view ETA</span>`);
+}
+setInterval(()=> buses.forEach(moveStep), 2500);
+
+/* ============ Side panel: list ETAs per stop (for multiple buses) ============ */
+function crowdColor(level){
+  if(level==='Low') return '#22c55e';
+  if(level==='Medium') return '#eab308';
+  return '#ef4444';
+}
+function refreshStopList(){
+  const box = $('stopList');
+  box.innerHTML='';
+  stops.forEach(st=>{
+    // compute ETAs for each bus to this stop
+    const arrivals = buses.map(b=>{
+      const pos = busMarkers[b.id].getLatLng();
+      const mins = etaMinutes([pos.lat,pos.lng],[st.lat,st.lng]);
+      return {bus:b.id, mins, crowd:b.crowd};
+    }).sort((a,b)=>a.mins-b.mins).slice(0,3);
+    const soon = arrivals[0];
+
+    const el = document.createElement('div');
+    el.className='stop-item';
+    el.innerHTML = `
+      <div class="stop-top">
+        <div>
+          <div style="font-weight:800">${st.name}</div>
+          <div class="mini">${arrivals.length} incoming</div>
+        </div>
+        <span class="eta-badge">${T[LANG].eta}: ${soon.mins} ${T[LANG].mins}</span>
+      </div>
+      <div class="arrivals">
+        ${arrivals.map(a=>`
+          <div class="arrival">
+            <span>🚌 ${a.bus}</span>
+            <span>${a.mins} ${T[LANG].mins}</span>
+          </div>
+          <div class="crowd"><span style="width:${a.crowd==='Low'?33:a.crowd==='Medium'?66:100}%; background:${crowdColor(a.crowd)}"></span></div>
+        `).join('')}
+      </div>
+    `;
+    box.appendChild(el);
+  });
+}
+setInterval(refreshStopList, 3000);
+refreshStopList();
+
+/* ============ Language switching ============ */
+function applyLang(){
+  $('titleSummary').textContent = T[LANG].nearby;
+  $('stopsHeader').textContent = T[LANG].stops;
+  $('featuresHeader').textContent = T[LANG].features;
+  $('liteState').textContent = liteMode ? T[LANG].liteOn : T[LANG].liteOff;
+}
+$('lang').addEventListener('change', e=>{ LANG = e.target.value; applyLang(); refreshStopList(); });
+applyLang();
+
+/* ============ Voice Assistant ============ */
+$('speakBtn').addEventListener('click', ()=>{
+  // speak the soonest arrival at first stop
+  const st = stops[0];
+  const pos = busMarkers[buses[0].id].getLatLng();
+  const mins = etaMinutes([pos.lat,pos.lng],[st.lat,st.lng]);
+  const text = LANG==='hi' ? `बस ${buses[0].id} ${mins} मिनट में आएगी`
+             : LANG==='pa' ? `ਬੱਸ ${buses[0].id} ${mins} ਮਿੰਟ ਵਿੱਚ ਆਵੇਗੀ`
+             : `Bus ${buses[0].id} will arrive in ${mins} minutes`;
+  const u = new SpeechSynthesisUtterance(text);
+  if(LANG==='hi') u.lang='hi-IN';
+  else if(LANG==='pa') u.lang='en-IN'; // Punjabi TTS may fallback; keeps demo smooth
+  else u.lang='en-US';
+  speechSynthesis.speak(u);
+});
+
+/* ============ SOS & Notifications ============ */
+$('sosBtn').addEventListener('click', ()=>{
+  showNotif('🚨 '+T[LANG].sos, '#ef4444');
+});
+$('notifyBtn').addEventListener('click', ()=>{
+  showNotif(`🔔 Bus ${buses[0].id} ${T[LANG].arriving}`, '#111827');
+});
+function showNotif(text, bg){
+  const n = $('notif'); n.textContent = text; n.style.background = bg; n.style.display='block';
+  setTimeout(()=> n.style.display='none', 3500);
+}
+
+/* ============ Center to user (geolocate) ============ */
+$('centerBtn').addEventListener('click', ()=>{
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(p=>{
+      const {latitude, longitude} = p.coords;
+      map.setView([latitude,longitude], 14);
+      L.circleMarker([latitude,longitude],{radius:8,color:'#0ea5e9',fillColor:'#38bdf8',fillOpacity:.8}).addTo(map).bindPopup('You are here').openPopup();
+    }, ()=> showNotif('Location blocked', '#111827'));
+  } else {
+    showNotif('Geolocation not supported', '#111827');
+  }
+});
+
+/* ============ Lite Mode toggle ============ */
+$('toggleLite').addEventListener('click', ()=>{
+  setLite(!liteMode);
+});
+
+/* ============ Radar “stop is pinging” when a bus is close ============ */
+function updateRadar(){
+  // pick first stop; if nearest bus < 0.4km -> show ping on map
+  const st = stops[0];
+  let minKm = Infinity;
+  buses.forEach(b=>{
+    const p = busMarkers[b.id].getLatLng();
+    const km = haversine([p.lat,p.lng],[st.lat,st.lng]);
+    if(km < minKm) minKm = km;
+  });
+  const r = $('radar');
+  if(minKm < 0.4){
+    const pt = map.latLngToContainerPoint([st.lat,st.lng]);
+    r.style.left = (pt.x-8)+'px';
+    r.style.top  = (pt.y-8)+'px';
+    r.style.display='block';
+  } else {
+    r.style.display='none';
+  }
+}
+setInterval(updateRadar, 1200);
+
+/* First paint */
+updateRadar();
+
+</script>
+</body>
+</html>
