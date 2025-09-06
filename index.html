@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ask Gauri Out</title>
+  <style>
+    body {
+      font-family: "Poppins", sans-serif;
+      text-align: center;
+      background: #ffe4ec;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .container {
+      background: white;
+      padding: 30px 50px;
+      border-radius: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      max-width: 420px;
+    }
+    h1 { color: #ff4f81; }
+    p { margin: 15px 0; }
+    .btn a {
+      text-decoration: none;
+      margin: 10px;
+      padding: 12px 30px;
+      background: #ff4f81;
+      color: white;
+      border-radius: 12px;
+      font-weight: bold;
+      display: inline-block;
+      transition: 0.3s;
+    }
+    .btn a:hover { background: #ff99b3; }
+    .heart {
+      font-size: 5rem;
+      animation: heartbeat 1s infinite;
+      color: red;
+    }
+    @keyframes heartbeat {
+      0% { transform: scale(1); }
+      25% { transform: scale(1.3); }
+      50% { transform: scale(1); }
+      75% { transform: scale(1.3); }
+      100% { transform: scale(1); }
+    }
+    .gif-box { margin-bottom: 15px; }
+  </style>
+</head>
+<body>
+  <div class="container" id="app"></div>
+
+  <!-- Tenor Embed Script -->
+  <script async src="https://tenor.com/embed.js"></script>
+  <!-- Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+
+  <script>
+    let step = 0;
+
+    function render() {
+      const app = document.getElementById("app");
+      if (step === 0) {
+        app.innerHTML = `
+          <div class="gif-box">
+            <div class="tenor-gif-embed" data-postid="22885016" data-share-method="host" data-aspect-ratio="1.05" data-width="100%"></div>
+          </div>
+          <h1>Gauri, do you love me? 🤗</h1>
+          <p>I am all yours ❤️</p>
+          <div class="btn">
+            <a href="#" onclick="yes()">Yes</a>
+            <a href="#" onclick="no()">No</a>
+          </div>`;
+      } 
+      else if (step === 1) {
+        app.innerHTML = `
+          <div class="gif-box">
+            <div class="tenor-gif-embed" data-postid="22050818" data-share-method="host" data-aspect-ratio="1" data-width="100%"></div>
+          </div>
+          <h1>Gauri, please think again! 🙄</h1>
+          <p>Itna jaldi No nahi bolna chahiye 😥</p>
+          <div class="btn">
+            <a href="#" onclick="yes()">Yes</a>
+            <a href="#" onclick="no()">No</a>
+          </div>`;
+      } 
+      else if (step === 2) {
+        app.innerHTML = `
+          <div class="gif-box">
+            <div class="tenor-gif-embed" data-postid="253027946666209433" data-share-method="host" data-aspect-ratio="1.37" data-width="100%"></div>
+          </div>
+          <h1>Itni jaldi No kyun Gauri? 😢</h1>
+          <p>Mujhe phir se ek chance do 🥺</p>
+          <div class="btn">
+            <a href="#" onclick="yes()">Yes</a>
+            <a href="#" onclick="no()">No</a>
+          </div>`;
+      } 
+      else if (step === 3) {
+        app.innerHTML = `
+          <div class="gif-box">
+            <div class="tenor-gif-embed" data-postid="15195810" data-share-method="host" data-aspect-ratio="1" data-width="100%"></div>
+          </div>
+          <h1>Ek aur baar soch lo Gauri! 😣</h1>
+          <p>Kyu aisa kar rahi ho? Mujhse door nahi reh sakti tum ❤️</p>
+          <div class="btn">
+            <a href="#" onclick="yes()">Yes</a>
+            <a href="#" onclick="forceYes()">No</a>
+          </div>`;
+      } 
+      else {
+        app.innerHTML = `
+          <div class="gif-box">
+            <div class="tenor-gif-embed" data-postid="253027946666209433" data-share-method="host" data-aspect-ratio="1.37" data-width="100%"></div>
+          </div>
+          <h1>Yay! Gauri, you said YES ❤️</h1>
+          <p>I promise to make you the happiest person 😘</p>
+          <div class="heart">💖</div>`;
+        throwConfetti();
+        setInterval(throwConfetti, 2500);
+      }
+
+      // reload tenor embeds
+      if (window.tenor) tenor.init();
+    }
+
+    function yes() {
+      step = 99; // success
+      render();
+    }
+
+    function no() {
+      step++;
+      render();
+    }
+
+    function forceYes() {
+      alert("Bas ab bohot ho gaya Gauri! Tumne YES hi kehna hai 😍");
+      yes();
+    }
+
+    function throwConfetti() {
+      confetti({ particleCount: 200, spread: 100, origin: { y: 0.6 } });
+    }
+
+    render();
+  </script>
+</body>
+</html>
